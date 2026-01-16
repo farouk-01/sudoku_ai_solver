@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def is_in_block(grid, r, c, num):
     br = 2 * (r // 2)
     bc = 2 * (c // 2)
@@ -31,11 +30,11 @@ def all_solutions():
 
     yield from generate_sudoku()
 
-count = 0
-for sol in all_solutions():
-    count += 1
-    print(f"Solution #{count}:")
-    for row in sol:
-                print(row)
-    print("-----------")
-print(f"Nombre de sudoku 4x4 trouvé : {count}")
+# count = 0
+# for sol in all_solutions():
+#     count += 1
+#     print(f"Solution #{count}:")
+#     for row in sol:
+#                 print(row)
+#     print("-----------")
+# print(f"Nombre de sudoku 4x4 trouvé : {count}")
