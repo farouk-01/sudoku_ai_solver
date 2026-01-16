@@ -60,4 +60,21 @@ def show_patterns(grids, per_row=10):
     plt.tight_layout()
     plt.show()
 
+def show_all_container_assignments(assign, reps, hidden_groups, max_show=30, per_row=10):
+    for cid in sorted(hidden_groups.keys()):
+        members = assign.get(cid, [])
+        if not members:
+            continue
+
+        container = reps[cid]
+
+        members = [g for g in members if not np.array_equal(g, container)]
+
+        grids = [container] + members
+        if max_show is not None:
+            grids = grids[:max_show + 1] 
+
+        print(f"\n---- CONTAINER {cid} | total members: {len(members)} ----")
+        show_patterns(grids, per_row=per_row)
+
 

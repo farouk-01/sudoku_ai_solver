@@ -253,3 +253,131 @@ def show_clusters_by_size(sols, labels, per_row=10, max_clusters=None, rep="cano
     print("Top clusters by size:", [(cid, len(clusters[cid])) for cid in order[:10]])
     show_patterns(reps, per_row=per_row)
     return clusters, order
+
+def motif_diag_adj_pairs(grid):
+    pairs = set()
+    for r in range(4):
+        for c in range(4):
+            v = int(grid[r, c])
+            for dr, dc in [(-1,-1), (-1,1), (1,-1), (1,1)]:
+                r2, c2 = r + dr, c + dc
+                if 0 <= r2 < 4 and 0 <= c2 < 4 and int(grid[r2, c2]) == v:
+                    a, b = (r, c), (r2, c2)
+                    pairs.add(tuple(sorted((a, b))))
+    return pairs
+
+def motif_xblock_positions(grid):
+    out = set()
+    for br in (0, 2):
+        for bc in (0, 2):
+            if int(grid[br, bc]) == int(grid[br+1, bc+1]) and int(grid[br, bc+1]) == int(grid[br+1, bc]):
+                out.add((br, bc))
+    return out
+
+def motif_set(grid):
+    s = set()
+
+    # 1) diagonal-adjacent equal pairs, tagged by digit
+    for r in range(4):
+        for c in range(4):
+            v = int(grid[r, c])
+            for dr, dc in [(-1,-1), (-1,1), (1,-1), (1,1)]:
+                r2, c2 = r + dr, c + dc
+                if 0 <= r2 < 4 and 0 <= c2 < 4 and int(grid[r2, c2]) == v:
+                    a, b = (r, c), (r2, c2)
+                    a, b = tuple(sorted((a, b)))
+                    s.add(("diag", v, a, b))
+
+    # 2) X motifs in each 2x2 block, keep diagonal roles (DO NOT sort digits)
+    for br in (0, 2):
+        for bc in (0, 2):
+            main1 = int(grid[br, bc])
+            main2 = int(grid[br+1, bc+1])
+            anti1 = int(grid[br, bc+1])
+            anti2 = int(grid[br+1, bc])
+
+            if main1 == main2 and anti1 == anti2:
+                s.add(("xblock", (br, bc), main1, anti1))
+
+    return s
+
+def is_hidden(inner, outer):
+    return motif_set(inner).issubset(motif_set(outer))
+
+def classify_reps_by_hidden(reps):
+    n = len(reps)
+
+    contains = [[False]*n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if i != j:
+                contains[i][j] = is_hidden(reps[j], reps[i])  # j hidden in i
+
+    containers = [i for i in range(n) if not any(contains[k][i] for k in range(n) if k != i)]
+
+    groups = {i: [i] for i in containers}
+    for j in range(n):
+        if j in containers:
+            continue
+        # choose smallest container that contains j (tightest)
+        candidates = [i for i in containers if contains[i][j]]
+        if candidates:
+            best = min(candidates, key=lambda i: len(motif_set(reps[i])))
+            groups[best].append(j)
+
+    return groups
+
+def classify_all_into_containers(sols, reps, hidden_groups):
+    """
+    Returns:
+      assign: dict[container_id or None] -> list[np.ndarray]
+      chosen: list[container_id or None] aligned with sols indices
+    """
+    container_ids = sorted(hidden_groups.keys())
+
+    sol_motifs = [motif_set(g) for g in sols]
+    cont_motifs = {cid: motif_set(reps[cid]) for cid in container_ids}
+
+    container_ids = sorted(container_ids, key=lambda cid: len(cont_motifs[cid]))
+
+    assign = defaultdict(list)
+    chosen = [None] * len(sols)
+
+    for i, (g, mg) in enumerate(zip(sols, sol_motifs)):
+        picked = None
+        for cid in container_ids:
+            if mg.issubset(cont_motifs[cid]):
+                picked = cid
+                break
+        chosen[i] = picked
+        assign[picked].append(g)
+
+    return dict(assign), chosen
+
+def expand_containers_until_full_cover(sols, reps, hidden_groups):
+    """
+    Returns:
+      final_containers : list[np.ndarray]  (actual grids, not indices)
+      assign           : final assignment dict
+    """
+    # start from existing containers (actual grids)
+    containers = [reps[cid] for cid in sorted(hidden_groups.keys())]
+
+    while True:
+        # build temporary reps list
+        temp_reps = containers
+
+        # fake hidden_groups: every rep is a container
+        temp_hidden = {i: [i] for i in range(len(temp_reps))}
+
+        assign, chosen = classify_all_into_containers(sols, temp_reps, temp_hidden)
+
+        unassigned = assign.get(None, [])
+        if not unassigned:
+            break  # full cover achieved
+
+        # promote one unassigned sudoku to container
+        new_container = unassigned[0]
+        containers.append(new_container)
+
+    return containers, assign
