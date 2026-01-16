@@ -381,3 +381,62 @@ def expand_containers_until_full_cover(sols, reps, hidden_groups):
         containers.append(new_container)
 
     return containers, assign
+
+def build_hasse_by_motifs(grids, motif_fn):
+    """
+    grids: list[np.ndarray]
+    motif_fn: function(grid) -> set  (your strict motif_set)
+
+    Returns:
+      motifs: list[set]
+      covers_out: dict[i] -> list[j] where i covers j (i is "above", j is "below")
+      ranks: list[int] = |motif_set| for layering
+    """
+    n = len(grids)
+    motifs = [motif_fn(g) for g in grids]
+    ranks = [len(s) for s in motifs]
+
+    # Group nodes by rank (motif count)
+    by_rank = defaultdict(list)
+    for i, r in enumerate(ranks):
+        by_rank[r].append(i)
+
+    # Sort ranks ascending so we can search downward efficiently
+    unique_ranks = sorted(by_rank.keys())
+
+    def is_strict_superset(i, j):
+        # i > j in poset
+        Mi, Mj = motifs[i], motifs[j]
+        return (len(Mi) > len(Mj)) and Mj.issubset(Mi)
+
+    covers_out = {i: [] for i in range(n)}
+
+    # For each node i, find its immediate predecessors (covered nodes) among smaller ranks.
+    for i in range(n):
+        Mi = motifs[i]
+        ri = len(Mi)
+
+        # candidates j such that Mj ⊂ Mi
+        candidates = []
+        for r in unique_ranks:
+            if r >= ri:
+                break
+            for j in by_rank[r]:
+                if motifs[j].issubset(Mi) and len(motifs[j]) < ri:
+                    candidates.append(j)
+
+        # Keep only "maximal" candidates under inclusion (these are covers)
+        # Strategy: sort candidates by size descending; keep j if it's not subset of any already-kept node.
+        candidates.sort(key=lambda j: len(motifs[j]), reverse=True)
+
+        kept = []
+        for j in candidates:
+            Mj = motifs[j]
+            # if there exists k already kept with Mj ⊆ Mk, then j is not a cover (k sits between)
+            if any(Mj.issubset(motifs[k]) and len(motifs[k]) > len(Mj) for k in kept):
+                continue
+            kept.append(j)
+
+        covers_out[i] = kept
+
+    return motifs, covers_out, ranks

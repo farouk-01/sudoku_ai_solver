@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 import math
 from collections import defaultdict
+import random
 
 def show_patterns(grids, per_row=10):
     if isinstance(grids, np.ndarray) and grids.ndim == 2:
@@ -77,4 +78,58 @@ def show_all_container_assignments(assign, reps, hidden_groups, max_show=30, per
         print(f"\n---- CONTAINER {cid} | total members: {len(members)} ----")
         show_patterns(grids, per_row=per_row)
 
+def draw_hasse(covers_out, ranks, title="Hasse diagram (hide relation)", seed=0):
+    """
+    covers_out: dict[i] -> list[j] edges i -> j (i covers j)
+    ranks: list[int] (node layers)
+    """
+    random.seed(seed)
+    n = len(ranks)
 
+    # Layer nodes by rank
+    layers = defaultdict(list)
+    for i, r in enumerate(ranks):
+        layers[r].append(i)
+
+    unique_ranks = sorted(layers.keys())
+
+    # Assign x positions within each rank
+    pos = {}
+    for r in unique_ranks:
+        nodes = layers[r]
+        # stable random-ish spread
+        xs = list(range(len(nodes)))
+        random.shuffle(xs)
+        for x, i in zip(xs, nodes):
+            pos[i] = (x, r)
+
+    # Normalize x within each layer for nicer spacing
+    for r in unique_ranks:
+        nodes = layers[r]
+        if len(nodes) <= 1:
+            for i in nodes:
+                x, y = pos[i]
+                pos[i] = (0.0, y)
+        else:
+            for k, i in enumerate(sorted(nodes)):
+                pos[i] = (k / (len(nodes) - 1), r)
+
+    plt.figure(figsize=(12, 6))
+
+    # Edges
+    for i, js in covers_out.items():
+        xi, yi = pos[i]
+        for j in js:
+            xj, yj = pos[j]
+            plt.plot([xi, xj], [yi, yj], lw=0.6)
+
+    # Nodes
+    xs = [pos[i][0] for i in range(n)]
+    ys = [pos[i][1] for i in range(n)]
+    plt.scatter(xs, ys, s=18)
+
+    plt.title(title)
+    plt.xlabel("within-layer position")
+    plt.ylabel("|motif_set|  (rank)")
+    plt.tight_layout()
+    plt.show()
